@@ -229,7 +229,7 @@ contract TicketFactory is ERC721 {
         Ticket storage ticket = flightTickets[flightID][seatNumber];
 
         require(ticket.isAvailable, "Ticket is not available");
-        require(msg.value == ticket.price, "Incorrect price");
+        //require(msg.value == ticket.price, "Incorrect price");
 
         // Mint NFT by transferring ownership to buyer
         // Mint NFT by assigning a unique token ID to the buyer
