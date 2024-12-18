@@ -91,7 +91,7 @@ contract TicketFactory is ERC721 {
 
     //event TemplateCreated(address indexed company, uint256 indexed templateId, string metadataURI, uint256 price);
     //event TicketMinted(address indexed buyer, uint256 indexed ticketId);
-    event FlightCreated(uint256 indexed flightId, string flightNumber, string departure, string destination, uint256 date);
+    event FlightCreated(uint256 indexed flightId, string indexed flightNumber, string departure, string destination, uint256 date, uint256 arrivalTime, uint256 totalTickets, uint256 availableTickets, bool isActive, bool shared, address airlineAddress);
     event TicketPurchased(uint256 indexed flightID, uint256 indexed ticketID, address indexed buyer);
     event TicketModified(
         uint256 indexed tokenId,
@@ -101,6 +101,8 @@ contract TicketFactory is ERC721 {
         uint256 newSeatNumber,
         address indexed user
     );
+
+    
 
         constructor() ERC721("AviationTicket", "AVT") {
         ticketCounter = 0;
@@ -183,7 +185,7 @@ contract TicketFactory is ERC721 {
             
         }
 
-        emit FlightCreated(flightCounter, flightNumber, departure, destination, date);
+        emit FlightCreated(flightCounter, flightNumber, departure, destination, date, arrivalTime, numberOfTickets, numberOfTickets, true, true, msg.sender);
         return flightCounter;
     }
 
