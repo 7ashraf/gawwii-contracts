@@ -100,6 +100,37 @@ contract Marketplace {
         delete listings[tokenAddress][tokenId];
     }
 
+   function getListedTickets(address tokenAddress, uint256 start, uint256 count)
+    public view returns (uint256[] memory, address[] memory, uint256[] memory)
+{
+    uint256 totalTickets = ticketCounter;  // Total number of tickets
+
+    if (start >= totalTickets) {
+        return (new uint256[](0), new address[](0), new uint256[](0)); // Return empty arrays if out of range
+    }
+
+    uint256 end = start + count > totalTickets ? totalTickets : start + count;
+    uint256 size = end - start;
+
+    uint256[] memory ticketIDs = new uint256[](size);
+    address[] memory sellers = new address[](size);
+    uint256[] memory prices = new uint256[](size);
+
+    uint256 index = 0;
+
+    for (uint256 i = start; i < end; i++) {
+        if (listings[tokenAddress][i].seller != address(0)) { // Ensure the ticket is listed
+            ticketIDs[index] = i;
+            sellers[index] = listings[tokenAddress][i].seller;
+            prices[index] = listings[tokenAddress][i].price;
+            index++;
+        }
+    }
+
+    return (ticketIDs, sellers, prices);
+}
+
+
         //note instead of taking the ticket id is passed because tickets exist before minting
         //note I think ticket id is redundunt, user does not all tickets, all tickets are resmebled by a single ticket which represents a flight 
     // function purchaseTicket(
