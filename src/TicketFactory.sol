@@ -614,6 +614,10 @@ function transferTicket(
     );
 }
 
+function getHashedUserInfo(uint256 tokenId) public view returns (bytes32) {
+    return ticketMetadata[tokenId].hashedUserInfo;
+}
+
 
 }
 

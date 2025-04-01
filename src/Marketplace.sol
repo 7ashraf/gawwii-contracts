@@ -2,202 +2,101 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-// import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./TicketFactory.sol";
+
 contract Marketplace {
-    uint256 ticketCounter = 0;
-    uint256 flightCounter = 0;   // Counter for flight IDs
+    TicketFactory public ticketFactory;
+    address public feeRecipient;
+    uint256 public feePercentage; // Basis points (e.g., 500 = 5%)
 
     struct Listing {
         address seller;
         uint256 price;
+        bytes32 hashedUserInfo; // Current hashed info for verification
     }
 
-    struct Ticket {
-        uint256 ticketID;
-        uint256 flightID;
-        string seatNumber;
-        //string classType;
-        uint256 price;
-        bool isAvailable;
-        bool isUsed;
-        //note should add reference to ticket metadata, and flight metadata
+    mapping(address => mapping(uint256 => Listing)) public listings;
 
+    event TicketListed(
+        address indexed seller,
+        uint256 indexed tokenId,
+        uint256 price
+    );
+    event TicketSold(
+        uint256 indexed tokenId,
+        address indexed seller,
+        address indexed buyer,
+        uint256 price
+    );
+    event TicketDelisted(uint256 indexed tokenId, address indexed seller);
+
+    constructor(address _ticketFactoryAddress, address _feeRecipient, uint256 _feePercentage) {
+        ticketFactory = TicketFactory(_ticketFactoryAddress);
+        feeRecipient = _feeRecipient;
+        feePercentage = _feePercentage;
     }
 
-    struct TicketMetadata {
-        uint256 ticketId;
-        bool isUsed;
-        uint256 flightID;
-        string seatNumber;
-        uint256 price;
-        // string classType;
-        //string departureLocation;
-        //string arrivalLocation;
-        bytes32 hashedUserInfo;
-        mapping(address => bool) checkedIn;
-
-
+    modifier onlyTicketOwner(uint256 tokenId) {
+        require(
+            IERC721(address(ticketFactory)).ownerOf(tokenId) == msg.sender,
+            "Not ticket owner"
+        );
+        _;
     }
 
-    struct Flight{
-
-        string flightNumber;
-        address airlineAddress; // Reference to the airline in the registry
-        uint256 flightID;
-        string departure;
-        string destination;
-        uint256 departureTime;
-        uint256 arrivalTime;
-        uint256 totalTickets; // Total number of tickets available
-        uint256 availableTickets;
-        bool isActive;
-        bool shared;
-        //should add reference to flight metadata
-
-    }
-
-    mapping(address => mapping(uint256 => Listing)) public listings;  // tokenAddress => tokenId => Listing
-    mapping(uint256 => address) public ticketOwners; // Track ticket ownership
-    mapping(uint256 => Flight) public flights;  // ticketId => Flight
-    mapping(uint256 => mapping(uint256 => Ticket)) public flightTickets;
-    mapping(uint256 => TicketMetadata) public ticketMetadata; // Track user-added metadata
-
-    event TicketListed(address indexed seller, address indexed tokenAddress, uint256 indexed tokenId, uint256 price);
-    event TicketSold(address indexed buyer, address indexed tokenAddress, uint256 indexed tokenId, uint256 price);
-    event TicketDelisted(address indexed seller, address indexed tokenAddress, uint256 indexed tokenId);
-    event TicketPurchased(uint256 indexed flightID, uint256 indexed ticketID, address indexed buyer);
-
-    // List a ticket for resale
-    function listTicketForResale(address tokenAddress, uint256 tokenId, uint256 price) external {
-        require(price > 0, "Price must be greater than zero");
-        IERC721 tokenContract = IERC721(tokenAddress);
-
-        // Ensure the sender owns the ticket
-        //require(tokenContract.ownerOf(tokenId) == msg.sender, "Only owner can list");
-
-        // Approve the marketplace to transfer the token
-        require(tokenContract.getApproved(tokenId) == address(this), "Approve marketplace to transfer");
-
-        listings[tokenAddress][tokenId] = Listing(msg.sender, price);
-        emit TicketListed(msg.sender, tokenAddress, tokenId, price);
-    }
-
-    // Buy a listed ticket
-    function buyTicket(address tokenAddress, uint256 tokenId) external payable {
-        Listing storage listing = listings[tokenAddress][tokenId];
-        require(listing.price > 0, "Ticket not listed for sale");
+    function listTicketForResale(
+        uint256 tokenId,
+        uint256 price,
+        bytes32 currentHashedUserInfo
+    ) external onlyTicketOwner(tokenId) {
+        require(price > 0, "Price must be > 0");
         
-        require(msg.value == listing.price, "Incorrect price");
+        // Verify current metadata matches
+        bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
+        require(storedHash == currentHashedUserInfo, "Invalid user info");
 
-        // Transfer payment to the seller
-        payable(listing.seller).transfer(msg.value);
+        listings[address(ticketFactory)][tokenId] = Listing(
+            msg.sender,
+            price,
+            currentHashedUserInfo
+        );
 
-        // Transfer the ticket to the buyer
-        IERC721(tokenAddress).safeTransferFrom(listing.seller, msg.sender, tokenId);
-
-        emit TicketSold(msg.sender, tokenAddress, tokenId, listing.price);
-        delete listings[tokenAddress][tokenId];
+        emit TicketListed(msg.sender, tokenId, price);
     }
 
-   function getListedTickets(address tokenAddress, uint256 start, uint256 count)
-    public view returns (uint256[] memory, address[] memory, uint256[] memory)
-{
-    uint256 totalTickets = ticketCounter;  // Total number of tickets
+    function buyTicket(
+        uint256 tokenId,
+        bytes32 newHashedUserInfo
+    ) external payable {
+        Listing storage listing = listings[address(ticketFactory)][tokenId];
+        require(listing.price > 0, "Ticket not listed");
+        // require(msg.value == listing.price, "Incorrect payment");
 
-    if (start >= totalTickets) {
-        return (new uint256[](0), new address[](0), new uint256[](0)); // Return empty arrays if out of range
+        // Verify listing integrity
+        bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
+        require(storedHash == listing.hashedUserInfo, "Ticket metadata modified");
+
+        // Calculate fees
+        uint256 fee = (msg.value * feePercentage) / 10000;
+        uint256 sellerProceeds = msg.value - fee;
+
+        // Transfer funds
+        payable(listing.seller).transfer(sellerProceeds);
+        payable(feeRecipient).transfer(fee);
+
+        // Transfer ticket and update metadata
+        ticketFactory.transferTicket(tokenId, msg.sender, newHashedUserInfo);
+
+        emit TicketSold(tokenId, listing.seller, msg.sender, listing.price);
+        delete listings[address(ticketFactory)][tokenId];
     }
 
-    uint256 end = start + count > totalTickets ? totalTickets : start + count;
-    uint256 size = end - start;
-
-    uint256[] memory ticketIDs = new uint256[](size);
-    address[] memory sellers = new address[](size);
-    uint256[] memory prices = new uint256[](size);
-
-    uint256 index = 0;
-
-    for (uint256 i = start; i < end; i++) {
-        if (listings[tokenAddress][i].seller != address(0)) { // Ensure the ticket is listed
-            ticketIDs[index] = i;
-            sellers[index] = listings[tokenAddress][i].seller;
-            prices[index] = listings[tokenAddress][i].price;
-            index++;
-        }
+    function delistTicket(uint256 tokenId) external onlyTicketOwner(tokenId) {
+        delete listings[address(ticketFactory)][tokenId];
+        emit TicketDelisted(tokenId, msg.sender);
     }
 
-    return (ticketIDs, sellers, prices);
-}
-
-
-        //note instead of taking the ticket id is passed because tickets exist before minting
-        //note I think ticket id is redundunt, user does not all tickets, all tickets are resmebled by a single ticket which represents a flight 
-    // function purchaseTicket(
-    //     uint256 flightID,
-    //     uint256 ticketID,
-    //     bytes32 hashedUserInfo
-    // ) external payable {
-        
-    //     Ticket storage ticket = flightTickets[flightID][ticketID];
-
-    //     require(ticket.isAvailable, "Ticket is not available");
-    //     require(msg.value == ticket.price, "Incorrect price");
-
-    //     // Mint NFT by transferring ownership to buyer
-    //     ticketOwners[ticketID] = msg.sender;
-    //     // Mint NFT by assigning a unique token ID to the buyer
-    //     uint256 tokenId = ticketCounter;
-    //     //_safeMint(msg.sender, tokenId);
-    //     ticketCounter++; // Increment token ID for the next mint
-
-        
-
-    //     // Store user metadata on-chain with ticket metadata
-    //     TicketMetadata storage ticketMetadata = ticketMetadata[ticketID];
-    //     ticketMetadata.ticketId = tokenId;
-    //     ticketMetadata.hashedUserInfo = hashedUserInfo;
-    //     ticketMetadata.flightID = flightID;
-    //     ticketMetadata.seatNumber = ticket.seatNumber;
-    //     ticketMetadata.price = ticket.price;
-    //     ticketMetadata.isUsed = false;
-    //     // ticketMetadata.classType = ticket.classType;
-    //     // ticketMetadata.departureLocation = flights[flightID].departure;
-    //     // ticketMetadata.arrivalLocation = flights[flightID].destination;
-    //     ticketMetadata.checkedIn[msg.sender] = true;
-
-
-
-    //     // ticketMetadata[ticketID] = TicketMetadata({
-
-    //     //     isUsed: false,
-    //     //     flightID: flightID,
-    //     //     hashedUserInfo: hashedUserInfo,
-    //     //     seatNumber: ticket.seatNumber
-            
-    //     //     //classType: ticket.classType
-    //     // });
-
-    //     // Mark ticket as unavailable
-    //     ticket.isAvailable = false;
-    //     flights[flightID].availableTickets -= 1;
-
-    //     // Emit an event for ticket purchase
-    //     emit TicketPurchased(flightID, ticketID, msg.sender);
-    // }
-
-
-    // Delist a ticket from resale
-    function delistTicket(address tokenAddress, uint256 tokenId) external {
-        Listing storage listing = listings[tokenAddress][tokenId];
-        require(listing.seller == msg.sender, "Only seller can delist");
-
-        emit TicketDelisted(msg.sender, tokenAddress, tokenId);
-        delete listings[tokenAddress][tokenId];
-    }
-
-    // View listing details
-    function getListing(address tokenAddress, uint256 tokenId) external view returns (Listing memory) {
-        return listings[tokenAddress][tokenId];
+    function getListing(uint256 tokenId) external view returns (Listing memory) {
+        return listings[address(ticketFactory)][tokenId];
     }
 }
