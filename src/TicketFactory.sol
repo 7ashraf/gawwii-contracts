@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+// import "@thirdweb-dev/contracts/eip/interface/IERC721Supply.sol";
+// import "@thirdweb-dev/contracts/eip/ERC721A.sol";
+// import "@thirdweb-dev/contracts/base/ERC721Base.sol";
 
-contract TicketFactory is ERC721 {
+
+
+contract TicketFactory is ERC721Enumerable {
     uint256 public ticketCounter;
     uint256 public flightCounter;   // Counter for flight IDs
+
+
+    address adminWallet = 0xcc3DcD86d470Eb14FbB83Fd614d16A103314271E;
 
 
 
@@ -14,11 +22,11 @@ contract TicketFactory is ERC721 {
 
         string flightNumber;
         address airlineAddress; // Reference to the airline in the registry
-        uint256 flightID;
+        uint256 flightId;
         string departure;
         string destination;
-        uint256 departureTime;
-        uint256 arrivalTime;
+        string departureTime;
+        string arrivalTime;
         uint256 totalTickets; // Total number of tickets available
         uint256 availableTickets;
         bool isActive;
@@ -39,36 +47,29 @@ contract TicketFactory is ERC721 {
 
 
     struct Ticket {
-        uint256 ticketID;
-        uint256 flightID;
+        address owner;
+        uint256 ticketId;
+        uint256 flightId;
         uint256 price;
         string class;
-
-    }
-
-    struct TicketMetadata {
-        uint256 ticketId;
         bool isUsed;
-        uint256 flightID;
-        uint256 price;
-        string classType;
         bytes32 hashedUserInfo;
-        mapping(address => bool) checkedIn;
-        bool isAvailable;
+        bool checkedIn;
         string seatNumber;
-
+        bool isActive;
+        bool isAvailable;
     }
+
+ 
 
 
     mapping(uint256 => Flight) public flights;  // flightId => Flight
-    //mapping(uint256 => TicketTemplate) public ticketTemplates;  // ticketId => TicketTemplate
     mapping(uint256 => bool) public ticketMinted;  // Tracks if a ticket has been minted
     mapping(address => Airline) public airlines;
     mapping(uint256 => string) private _tokenURIs;
-    //mapping(uint256 => TicketMetadata) public ticketData;
     mapping(uint256 => mapping(uint256 => Ticket)) public flightTickets; //flight id => list of flight tickets => ticketId => to ticket struct
     mapping(uint256 => address) public ticketOwners; // Track ticket ownership
-    mapping(uint256 => TicketMetadata) public ticketMetadata; // Track user-added metadata
+    mapping(uint256 => Ticket) public ticketMetadata; // Track user-added metadata
 
 
 
@@ -80,15 +81,15 @@ contract TicketFactory is ERC721 {
         string indexed flightNumber, 
         string departure, 
         string destination, 
-        uint256 date, 
-        uint256 arrivalTime, 
+        string departureTime, 
+        string  arrivalTime, 
         uint256 totalTickets, 
         uint256 availableTickets, 
         bool isActive, 
         bool shared, 
         address airlineAddress
     );
-    event TicketPurchased(uint256 indexed flightID, uint256 indexed ticketID, address indexed buyer);
+    event TicketPurchased(uint256 indexed flightId, uint256 indexed ticketId, address indexed buyer);
     
     event TicketModified(
         uint256 indexed tokenId,
@@ -98,8 +99,8 @@ contract TicketFactory is ERC721 {
     );
 
     event TicketCheckedIn(
-        uint256 indexed ticketID,
-        uint256 flightID,
+        uint256 indexed ticketId,
+        uint256 flightId,
         string seatNumber,
         address indexed user,
         bytes32 hashedUserInfo,
@@ -107,18 +108,17 @@ contract TicketFactory is ERC721 {
 
     );
     event TicketTransferred(
-    uint256 indexed ticketId,
-    uint256 indexed flightId,
-    string seatNumber,
-    address indexed from,
-    address to,
-    bytes32 newHashedUserInfo
-);
+        uint256 indexed ticketId,
+        uint256 indexed flightId,
+        string seatNumber,
+        address indexed from,
+        address to,
+        bytes32 newHashedUserInfo
+    );
 
     
 
-        constructor() ERC721("AviationTicket", "AVT") {
-        ticketCounter = 0;
+    constructor() ERC721("AviationTicket", "AVT") {
     }
 
     modifier onlyAuthorized() {
@@ -133,19 +133,20 @@ contract TicketFactory is ERC721 {
 
 
     function registerAirline(
-    address airlineAddress,
-    string memory name,
-    string memory iataCode,
-    string memory metadataURI
-) external {
-    airlines[airlineAddress] = Airline({
-        name: name,
-        iataCode: iataCode,
-        metadataURI: metadataURI,
-        airlineAddress: airlineAddress,
-        isAuthorized: true
-    });
-}
+        address airlineAddress,
+        string memory name,
+        string memory iataCode,
+        string memory metadataURI
+        ) external
+        {
+            airlines[airlineAddress] = Airline({
+                name: name,
+                iataCode: iataCode,
+                metadataURI: metadataURI,
+                airlineAddress: airlineAddress,
+                isAuthorized: true
+            });
+    }
 
 
 
@@ -155,18 +156,18 @@ contract TicketFactory is ERC721 {
         string memory flightNumber,
         string memory departure,
         string memory destination,
-        uint256 date,
+        string memory date,
         uint256 numberOfTickets,
         string[] memory seatNumbers,
         // string[] memory classTypes,
-        uint256 arrivalTime
+        string memory arrivalTime
     ) external returns (uint256) {
         
         flightCounter++;
-        uint256 flightID = flightCounter;
+        uint256 flightId = flightCounter;
 
-        flights[flightID] = Flight({
-            flightID: flightID,
+        flights[flightId] = Flight({
+            flightId: flightId,
             airlineAddress: msg.sender,
             flightNumber: flightNumber,
             departure: departure,
@@ -184,15 +185,13 @@ contract TicketFactory is ERC721 {
         // Initialize tickets
         for (uint256 i = 0; i < numberOfTickets; i++) {
 
-            flightTickets[flightID][i] = Ticket({
+            // flightTickets[flightId][i] = Ticket({
 
-                ticketID: i,//note can be set to a unique value so it is used as a token id also
-                flightID: flightID,
-                class: "Economy",
-                price: 1
-
-
-            });
+            //     ticketId: i,//note can be set to a unique value so it is used as a token id also
+            //     flightId: flightId,
+            //     class: "Economy",
+            //     price: 1
+            // });
             
         }
 
@@ -200,46 +199,17 @@ contract TicketFactory is ERC721 {
         return flightCounter;
     }
 
-    // Create a new ticket template
-    // function createTicketTemplate(uint256 flightId, string memory metadataURI, uint256 price) external onlyAuthorized returns (uint256) {
-    //     ticketCounter += 1;
-    //     uint256 newTemplateId = ticketCounter;
-
-    //     ticketTemplates[newTemplateId] = TicketTemplate({
-    //         flightId: flightId,
-    //         company: msg.sender,
-    //         metadataURI: metadataURI,
-    //         price: price,
-    //         isMintable: true
-    //     });
-
-    //     emit TemplateCreated(msg.sender, newTemplateId, metadataURI, price);
-    //     return newTemplateId;
-    // }
-
-    // Mint a ticket on-demand
-    // function mintTicket(uint256 templateId) external payable {
-    //     require(ticketTemplates[templateId].isMintable, "Ticket not available for minting");
-    //     require(msg.value == ticketTemplates[templateId].price, "Incorrect payment amount");
-    //     require(!ticketMinted[templateId], "Ticket already minted");
-
-    //     ticketMinted[templateId] = true;
-    //     _mint(msg.sender, templateId);
-
-    //     payable(ticketTemplates[templateId].company).transfer(msg.value);  // Transfer funds to the company
-
-    //     emit TicketMinted(msg.sender, templateId);
-    // }
+    
 
     // note instead of taking the ticket id is passed because tickets exist before minting
     function purchaseTicket(
-        uint256 flightID,
-        uint256  seatNumber,
+        uint256 flightId,
+        address to,
         bytes32 hashedUserInfo
     ) external payable {
         //note should be a struct for tickets listed, that is different from the tickets that are minted
         
-        Ticket storage ticket = flightTickets[flightID][seatNumber];
+        // Ticket storage ticket = flightTickets[flightId][seatNumber];
 
         // require(ticket.isAvailable, "Ticket is not available");
         //require(msg.value == ticket.price, "Incorrect price");
@@ -247,42 +217,32 @@ contract TicketFactory is ERC721 {
         // Mint NFT by transferring ownership to buyer
         // Mint NFT by assigning a unique token ID to the buyer
         uint256 tokenId = ticketCounter;
-        _safeMint(msg.sender, tokenId);
+        _safeMint(to, 1);
         ticketCounter++; // Increment token ID for the next mint
 
-        ticketOwners[tokenId] = msg.sender;
+        ticketOwners[tokenId] = to;
 
 
         
 
         // Store user metadata on-chain with ticket metadata
-        TicketMetadata storage ticketMetadata = ticketMetadata[tokenId];
+        Ticket storage ticketMetadata = ticketMetadata[tokenId];
         ticketMetadata.ticketId = tokenId;
         ticketMetadata.hashedUserInfo = hashedUserInfo;
-        ticketMetadata.flightID = flightID;
-        ticketMetadata.price = ticket.price;
+        ticketMetadata.flightId = flightId;
+        ticketMetadata.price = ticketMetadata.price;
         ticketMetadata.isUsed = false;
-        // ticketMetadata.classType = ticket.classType;
-        ticketMetadata.checkedIn[msg.sender] = false;
+        ticketMetadata.checkedIn = false;
 
 
 
-        // ticketMetadata[ticketID] = TicketMetadata({
-
-        //     isUsed: false,
-        //     flightID: flightID,
-        //     hashedUserInfo: hashedUserInfo,
-        //     seatNumber: ticket.seatNumber
-            
-        //     //classType: ticket.classType
-        // });
 
         // Mark ticket as unavailable
         ticketMetadata.isAvailable = false;
-        flights[flightID].availableTickets -= 1;
+        flights[flightId].availableTickets -= 1;
 
         // Emit an event for ticket purchase
-        emit TicketPurchased(flightID, tokenId, msg.sender);
+        emit TicketPurchased(flightId, tokenId, msg.sender);
     }
 
     function updateAirlineMetadata(
@@ -293,32 +253,60 @@ contract TicketFactory is ERC721 {
         airlines[airlineAddress].metadataURI = newMetadataURI;
     }
 
+    function modifyTicket(uint256 ticketId, uint256 newFlightId) onlyAuthorized() external {
+        // Verify ownership of the ticket
+        // require(ticketOwners[ticketId] == msg.sender, "You do not own this ticket");
+
+        // Retrieve the current ticket metadata
+        Ticket storage ticketMetadata = ticketMetadata[ticketId];
+        uint256 oldFlightId = ticketMetadata.flightId;
+
+        // Ensure the new flight is available
+        Flight storage newFlight = flights[newFlightId];
+        require(newFlight.isActive, "Flight is not active");
+
+        // Update the old flight availability
+        flights[oldFlightId].availableTickets += 1;
+
+        // Update the new flight availability
+        flights[newFlightId].availableTickets -= 1;
+
+        // Update ticket metadata
+        ticketMetadata.flightId = newFlightId;
+
+        // Emit an event for ticket modification
+        //false msg.sender
+        emit TicketModified(ticketId, oldFlightId, newFlightId, msg.sender);
+
+    }
+
+
+    // needs huge refactoring
 
     function modifyTicket(
         uint256 ticketId,
         string memory flightNumber,
         string memory departure,
         string memory destination,
-        uint256 departureTime,
-        uint256 arrivalTime,
-        uint256 totalTickets,
-        uint256 newFlightID
-    ) external payable {
+        string memory departureTime,
+        string memory arrivalTime,
+        uint256 totalTickets
+    ) onlyAuthorized() external payable {
         // Verify ownership of the ticket
-        require(ticketOwners[ticketId] == msg.sender, "You do not own this ticket");
+        // require(ticketOwners[ticketId] == msg.sender, "You do not own this ticket");
 
         // Retrieve the current ticket metadata
-        TicketMetadata storage ticketMetadata = ticketMetadata[ticketId];
-        uint256 oldFlightID = ticketMetadata.flightID;
-    uint256 flightID = findFlight(flightNumber, departure, destination, departureTime);
+        Ticket storage ticketMetadata = ticketMetadata[ticketId];
+        uint256 oldFlightID = ticketMetadata.flightId;
+        uint256 flightId = findFlight(flightNumber, departure, destination, departureTime);
 
-    if (flightID == 0) {
+    if (flightId == 0) {
         // Step 2: Create flight if it doesn't exist
         flightCounter++;
-        flightID = flightCounter;
+        flightId = flightCounter;
 
-        flights[flightID] = Flight({
-            flightID: flightID,
+        flights[flightId] = Flight({
+            flightId: flightId,
             airlineAddress: msg.sender,
             flightNumber: flightNumber,
             departure: departure,
@@ -334,12 +322,12 @@ contract TicketFactory is ERC721 {
 
 
         emit FlightCreated(
-            flightID, flightNumber, departure, destination, departureTime, 
+            flightId, flightNumber, departure, destination, departureTime, 
             arrivalTime, totalTickets, totalTickets, true, false, msg.sender
         );
     } else {
         // Step 3: Handle existing flight
-        Flight storage flight = flights[flightID];
+        Flight storage flight = flights[flightId];
 
         require(flight.isActive, "Flight is not active");
         // require(!flight.isExternal, "Cannot convert an inactive external flight");
@@ -348,19 +336,19 @@ contract TicketFactory is ERC721 {
     // Step 4: Proceed to mint ticket for the user
     // require(ticket.isAvailable, "Ticket is not available");
 
-    Ticket storage ticket = flightTickets[flightID][ticketId];
+    Ticket storage ticket = flightTickets[flightId][ticketId];
 
 
     // ticket.isAvailable = false;
-    flights[flightID].availableTickets -= 1;
+    flights[flightId].availableTickets -= 1;
 
         // Update ticket metadata
 
-        ticketMetadata.flightID = flightID;
+        ticketMetadata.flightId = flightId;   
         ticketMetadata.price = ticket.price;
         ticketMetadata.isUsed = false;
         // ticketMetadata.classType = ticket.classType;
-        ticketMetadata.checkedIn[msg.sender] = false;
+        // ticketMetadata.checkedIn[msg.sender] = false;
 
 
 
@@ -389,12 +377,12 @@ contract TicketFactory is ERC721 {
         flights[oldFlightID].availableTickets += 1;
 
         // Update the new seat availability
-        flights[newFlightID].availableTickets -= 1;
+        flights[flightId].availableTickets -= 1;
 
         // Update ticket metadata
 
         // Emit an event for ticket modification
-        emit TicketModified(ticketId, oldFlightID, newFlightID, msg.sender);
+        emit TicketModified(ticketId, oldFlightID, flightId, msg.sender);
     }
 
 
@@ -404,9 +392,10 @@ contract TicketFactory is ERC721 {
 
         
 
-        TicketMetadata storage ticketMetadata = ticketMetadata[ticketId];
-        Ticket storage ticket = flightTickets[ticketMetadata.flightID][ticketMetadata.ticketId];
+        Ticket storage ticketMetadata = ticketMetadata[ticketId];
+        Ticket storage ticket = flightTickets[ticketMetadata.flightId][ticketMetadata.ticketId];
         require(ticketMetadata.isUsed == false, "Ticket has already been used");
+        require(ticketMetadata.checkedIn == false, "You have already checked in");
         // require(ticket.isAvailable == true, "Ticket is not available");
         // require(ticket.isUsed == false, "Ticket has already been used");
         // require(ticketMetadata.checkedIn[msg.sender] == false, "You have already checked in");
@@ -416,83 +405,84 @@ contract TicketFactory is ERC721 {
         // ticket.isUsed = true;
         // ticket.seatNumber = _seatNumber;
         ticketMetadata.seatNumber = _seatNumber;
-        ticketMetadata.checkedIn[msg.sender] = true;
+        ticketMetadata.checkedIn = true;
 
         address ticketOwner = ticketOwners[ticketId];
 
 
         // Emit an event for ticket check-in
-        //emit TicketModified(ticketId, ticketMetadata.flightID, ticketMetadata.seatNumber, ticketMetadata.flightID, ticketMetadata.seatNumber, ticketOwner);
+        //emit TicketModified(ticketId, ticketMetadata.flightId, ticketMetadata.seatNumber, ticketMetadata.flightId, ticketMetadata.seatNumber, ticketOwner);
 
-        emit TicketCheckedIn(ticketId, ticketMetadata.flightID, ticketMetadata.seatNumber, ticketOwner, ticketMetadata.hashedUserInfo, msg.sender);
+        emit TicketCheckedIn(ticketId, ticketMetadata.flightId, ticketMetadata.seatNumber, ticketOwner, ticketMetadata.hashedUserInfo, msg.sender);
     }
 
 
     function addExternalFlight(
-    string memory flightNumber,
-    string memory departure,
-    string memory destination,
-    uint256 departureTime,
-    uint256 arrivalTime,
-    uint256 numberOfSeats
-) public onlyAuthorizedAirline returns (uint256) {
-    flightCounter++;
-    uint256 flightID = flightCounter;
+        string memory flightNumber,
+        string memory departure,
+        string memory destination,
+        string memory departureTime,
+        string memory arrivalTime,
+        uint256 numberOfSeats
+     ) public onlyAuthorizedAirline returns (uint256) {
+        flightCounter++;
+        uint256 flightId = flightCounter;
 
-    flights[flightID] = Flight({
-        flightID: flightID,
-        airlineAddress: msg.sender,
-        flightNumber: flightNumber,
-        departure: departure,
-        destination: destination,
-        departureTime: departureTime,
-        arrivalTime: arrivalTime,
-        totalTickets: numberOfSeats,
-        availableTickets: numberOfSeats,
-        isActive: true,
-        shared: true,
-        isExternal: true
-    });
+        flights[flightId] = Flight({
+            flightId: flightId,
+            airlineAddress: msg.sender,
+            flightNumber: flightNumber,
+            departure: departure,
+            destination: destination,
+            departureTime: departureTime,
+            arrivalTime: arrivalTime,
+            totalTickets: numberOfSeats,
+            availableTickets: numberOfSeats,
+            isActive: true,
+            shared: true,
+            isExternal: true
+        });
 
-    emit FlightCreated(
-        flightID,
-        flightNumber,
-        departure,
-        destination,
-        departureTime,
-        arrivalTime,
-        numberOfSeats,
-        numberOfSeats,
-        true,
-        true,
-        msg.sender
-    );
+        emit FlightCreated(
+            flightId,
+            flightNumber,
+            departure,
+            destination,
+            departureTime,
+            arrivalTime,
+            numberOfSeats,
+            numberOfSeats,
+            true,
+            true,
+            msg.sender
+        );
 
-    return flightID;
-}
+        return flightId;
+    }
 
 
 function purchaseExternalTicket(
     string memory flightNumber,
     string memory departure,
     string memory destination,
-    uint256 departureTime,
-    uint256 arrivalTime,
+    string memory departureTime,
+    string memory arrivalTime,
     uint256 totalTickets,
-    bytes32 hashedUserInfo
-) external payable {
+    bytes32 hashedUserInfo,
+    address to
+    ) external payable returns (uint256) {
     // Step 1: Check if flight already exists
     //no need, spurce of flights is airline backend
-    uint256 flightID = findFlight(flightNumber, departure, destination, departureTime);
+    uint256 flightId = findFlight(flightNumber, departure, destination, departureTime);
 
-    if (flightID == 0) {
+    if (flightId == 0) {
         // Step 2: Create flight if it doesn't exist
         flightCounter++;
-        flightID = flightCounter;
+        flightId = flightCounter;
 
-        flights[flightID] = Flight({
-            flightID: flightID,
-            airlineAddress: msg.sender,
+        flights[flightId] = Flight({
+            flightId: flightId,
+            airlineAddress: msg.sender,// wtf
             flightNumber: flightNumber,
             departure: departure,
             destination: destination,
@@ -501,51 +491,55 @@ function purchaseExternalTicket(
             availableTickets: totalTickets,
             arrivalTime: arrivalTime,
             isActive: true,
-            shared: false,
+            shared: true,
             isExternal: true
         });
 
 
         emit FlightCreated(
-            flightID, flightNumber, departure, destination, departureTime, 
+            flightId, flightNumber, departure, destination, departureTime, 
             arrivalTime, totalTickets, totalTickets, true, false, msg.sender
         );
     } else {
         // Step 3: Handle existing flight
-        Flight storage flight = flights[flightID];
+        Flight storage flight = flights[flightId];
 
         require(flight.isActive, "Flight is not active");
-        require(!flight.isExternal, "Cannot convert an inactive external flight");
+        // require(!flight.isExternal, "Cannot convert an inactive external flight");
     }
 
     // Step 4: Proceed to mint ticket for the user
     // require(ticket.isAvailable, "Ticket is not available");
 
     uint256 tokenId = ticketCounter;
-    _safeMint(msg.sender, tokenId);
+    _safeMint(to, tokenId);
+    // approve(adminWallet, tokenId);
+    // setApprovalForAll(adminWallet, true);
     ticketCounter++;
-    Ticket storage ticket = flightTickets[flightID][tokenId];
+    Ticket storage ticket = flightTickets[flightId][tokenId];
 
 
-    ticketOwners[tokenId] = msg.sender;
+    ticketOwners[tokenId] = to;
     // ticket.isAvailable = false;
-    flights[flightID].availableTickets -= 1;
+    flights[flightId].availableTickets -= 1;
 
         // Update ticket metadata
 
-        TicketMetadata storage ticketMetadata = ticketMetadata[tokenId];
+        Ticket storage ticketMetadata = ticketMetadata[tokenId];
         ticketMetadata.ticketId = tokenId;
         ticketMetadata.hashedUserInfo = hashedUserInfo;
-        ticketMetadata.flightID = flightID;
+        ticketMetadata.flightId = flightId;
         ticketMetadata.price = ticket.price;
         // ticketMetadata.isUsed = false;
         // ticketMetadata.classType = ticket.classType;
-        ticketMetadata.checkedIn[msg.sender] = false;
+        ticketMetadata.checkedIn = false;
 
 
+    
 
 
-    emit TicketPurchased(flightID, tokenId, msg.sender);
+    emit TicketPurchased(flightId, tokenId, to);
+    return tokenId;
 }
 
 // Helper function to find an existing flight
@@ -553,7 +547,7 @@ function findFlight(
     string memory flightNumber,
     string memory departure,
     string memory destination,
-    uint256 departureTime
+    string memory departureTime
 ) internal view returns (uint256) {
     for (uint256 i = 1; i <= flightCounter; i++) {
         Flight storage flight = flights[i];
@@ -561,7 +555,8 @@ function findFlight(
             keccak256(abi.encodePacked(flight.flightNumber)) == keccak256(abi.encodePacked(flightNumber)) &&
             keccak256(abi.encodePacked(flight.departure)) == keccak256(abi.encodePacked(departure)) &&
             keccak256(abi.encodePacked(flight.destination)) == keccak256(abi.encodePacked(destination)) &&
-            flight.departureTime == departureTime
+            keccak256(abi.encodePacked(flight.departureTime)) == keccak256(abi.encodePacked(departureTime)) &&
+            flight.isActive
         ) {
             return i;
         }
@@ -573,24 +568,25 @@ function findFlight(
 //should get hashed user info from mapping
 
 function transferTicket(
+    address from,
     uint256 ticketId,
     address to,
     bytes32 newHashedUserInfo
-) external {
+    ) external {
     // Check if sender is the owner of the ticket
     //require(ownerOf(ticketId) == msg.sender, "You are not the owner of this ticket");
     require(to != address(0), "Cannot transfer to zero address");
     
     // Get the current ticket metadata
-    TicketMetadata storage metadata = ticketMetadata[ticketId];
+    Ticket storage metadata = ticketMetadata[ticketId];
     // require(!metadata.isUsed, "Cannot transfer used ticket");
     
     // Get the ticket information
-    Ticket storage ticket = flightTickets[metadata.flightID][metadata.ticketId];
+    Ticket storage ticket = flightTickets[metadata.flightId][metadata.ticketId];
     // require(!ticket.isUsed, "Cannot transfer used ticket");
 
     // Transfer the NFT
-    _transfer(msg.sender, to, ticketId);
+    _transfer(from, to, ticketId);
     
     // Update ticket ownership mapping
     ticketOwners[ticketId] = to;
@@ -601,14 +597,14 @@ function transferTicket(
     metadata.hashedUserInfo = newHashedUserInfo;
     
     // Reset check-in status for the new owner
-    metadata.checkedIn[msg.sender] = false;
+    metadata.checkedIn = false;//wtf
     
     // Emit transfer event
     emit TicketTransferred(
         ticketId,   
-        metadata.flightID,
+        metadata.flightId,
         metadata.seatNumber,
-        msg.sender,
+        from,
         to,
         newHashedUserInfo
     );
@@ -618,7 +614,13 @@ function getHashedUserInfo(uint256 tokenId) public view returns (bytes32) {
     return ticketMetadata[tokenId].hashedUserInfo;
 }
 
+    function setAdmin (address _adminWallet) public /*onlyOwner*/ {
+        adminWallet = _adminWallet;
+    }
 
+
+
+    
 }
 
 
