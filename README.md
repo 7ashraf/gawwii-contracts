@@ -26,6 +26,9 @@ to compile your contracts. This will also detect the [Contracts Extensions Docs]
 
 When you're ready to deploy your contracts, just run one of the following command to deploy you're contracts:
 
+
+forge create ./src/TicketFactory.sol:TicketFactory --rpc-url 127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
 ```bash
 npm run deploy
 # or

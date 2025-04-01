@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+// import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 // import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./TicketFactory.sol";
 contract Marketplace {
@@ -71,7 +71,7 @@ contract Marketplace {
     // List a ticket for resale
     function listTicketForResale(address tokenAddress, uint256 tokenId, uint256 price) external {
         require(price > 0, "Price must be greater than zero");
-        IERC721 tokenContract = IERC721(tokenAddress);
+        IERC721Enumerable tokenContract = IERC721Enumerable(tokenAddress);
 
         // Ensure the sender owns the ticket
         //require(tokenContract.ownerOf(tokenId) == msg.sender, "Only owner can list");
@@ -94,7 +94,7 @@ contract Marketplace {
         payable(listing.seller).transfer(msg.value);
 
         // Transfer the ticket to the buyer
-        IERC721(tokenAddress).safeTransferFrom(listing.seller, msg.sender, tokenId);
+        IERC721Enumerable(tokenAddress).safeTransferFrom(listing.seller, msg.sender, tokenId);
 
         emit TicketSold(msg.sender, tokenAddress, tokenId, listing.price);
         delete listings[tokenAddress][tokenId];
