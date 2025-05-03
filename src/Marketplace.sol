@@ -12,7 +12,6 @@ contract Marketplace {
     struct Listing {
         address seller;
         uint256 price;
-        bytes32 hashedUserInfo; // Current hashed info for verification
     }
 
     mapping(address => mapping(uint256 => Listing)) public listings;
@@ -30,15 +29,19 @@ contract Marketplace {
     );
     event TicketDelisted(uint256 indexed tokenId, address indexed seller);
 
-    constructor(address _ticketFactoryAddress, address _feeRecipient, uint256 _feePercentage) {
-        ticketFactory = TicketFactory(_ticketFactoryAddress);
-        feeRecipient = _feeRecipient;
-        feePercentage = _feePercentage;
+    constructor() {
+    }
+    
+    function initialize(TicketFactory _ticketFactory) external {
+        require(address(ticketFactory) == address(0), "Already initialized");
+        ticketFactory = _ticketFactory;
+        // feeRecipient = _feeRecipient;
+        // feePercentage = _feePercentage;
     }
 
     modifier onlyTicketOwner(uint256 tokenId) {
         require(
-            IERC721(address(ticketFactory)).ownerOf(tokenId) == msg.sender,
+            IERC721(address(ticketFactory)).ownerOf(tokenId) == msg.sender ,
             "Not ticket owner"
         );
         _;
@@ -46,19 +49,17 @@ contract Marketplace {
 
     function listTicketForResale(
         uint256 tokenId,
-        uint256 price,
-        bytes32 currentHashedUserInfo
-    ) external onlyTicketOwner(tokenId) {
+        uint256 price
+    ) external  {
         require(price > 0, "Price must be > 0");
         
         // Verify current metadata matches
         bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
-        require(storedHash == currentHashedUserInfo, "Invalid user info");
+        // require(storedHash == currentHashedUserInfo, "Invalid user info");
 
         listings[address(ticketFactory)][tokenId] = Listing(
             msg.sender,
-            price,
-            currentHashedUserInfo
+            price
         );
 
         emit TicketListed(msg.sender, tokenId, price);
@@ -73,19 +74,19 @@ contract Marketplace {
         // require(msg.value == listing.price, "Incorrect payment");
 
         // Verify listing integrity
-        bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
-        require(storedHash == listing.hashedUserInfo, "Ticket metadata modified");
+        // bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
+        // require(storedHash == listing.hashedUserInfo, "Ticket metadata modified");
 
         // Calculate fees
-        uint256 fee = (msg.value * feePercentage) / 10000;
-        uint256 sellerProceeds = msg.value - fee;
+        // uint256 fee = (msg.value * feePercentage) / 10000;
+        // uint256 sellerProceeds = msg.value - fee;
 
         // Transfer funds
-        payable(listing.seller).transfer(sellerProceeds);
-        payable(feeRecipient).transfer(fee);
+        // payable(listing.seller).transfer(sellerProceeds);
+        // payable(feeRecipient).transfer(fee);
 
         // Transfer ticket and update metadata
-        ticketFactory.transferTicket(tokenId, msg.sender, newHashedUserInfo);
+        ticketFactory.transferTicket(listing.seller, tokenId, msg.sender, newHashedUserInfo);
 
         emit TicketSold(tokenId, listing.seller, msg.sender, listing.price);
         delete listings[address(ticketFactory)][tokenId];

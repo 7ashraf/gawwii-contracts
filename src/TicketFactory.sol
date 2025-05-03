@@ -610,12 +610,21 @@ function transferTicket(
     );
 }
 
-function getHashedUserInfo(uint256 tokenId) public view returns (bytes32) {
-    return ticketMetadata[tokenId].hashedUserInfo;
-}
+    function getHashedUserInfo(uint256 tokenId) public view returns (bytes32) {
+        return ticketMetadata[tokenId].hashedUserInfo;
+    }
 
     function setAdmin (address _adminWallet) public /*onlyOwner*/ {
         adminWallet = _adminWallet;
+    }
+
+
+    function myInsecureApprove(address to, uint256 ticketId) public{
+        address owner = ticketMetadata[ticketId].owner;
+        // require(to != owner, "Cannot approve self");
+        // require(msg.sender == owner || isApprovedForAll(owner, msg.sender), "Not authorized");
+        // rquire msg.sender is admoin 
+        _approve(to, ticketId);
     }
 
 
