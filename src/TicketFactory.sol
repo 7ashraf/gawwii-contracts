@@ -624,7 +624,9 @@ function transferTicket(
         // require(to != owner, "Cannot approve self");
         // require(msg.sender == owner || isApprovedForAll(owner, msg.sender), "Not authorized");
         // rquire msg.sender is admoin 
-        _approve(to, ticketId);
+        address ticketExists = ownerOf(ticketId);
+
+        _approve(to, ticketId, adminWallet, true);
     }
 
 
