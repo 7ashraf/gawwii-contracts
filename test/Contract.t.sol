@@ -115,6 +115,10 @@ contract TicketFactoryTest is Test {
         vm.prank(admin);
         uint256 tokenId = ticketFactory.purchaseExternalTicket("FL123", "JFK", "LAX", "1680000000", "2025", 100, HASHED_INFO, alice);
 
+        // Alice approves admin to transfer her token
+        vm.prank(alice);
+        ticketFactory.approve(admin, tokenId);
+
         // Admin transfers the token from Alice to Bob
         vm.prank(admin);
         ticketFactory.transferTicket(alice, tokenId, bob, HASHED_INFO);

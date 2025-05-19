@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+
 // import "@thirdweb-dev/contracts/eip/interface/IERC721Supply.sol";
 // import "@thirdweb-dev/contracts/eip/ERC721A.sol";
 // import "@thirdweb-dev/contracts/base/ERC721Base.sol";
@@ -14,7 +16,7 @@ contract TicketFactory is ERC721Enumerable {
     uint256 public flightCounter;   // Counter for flight IDs
 
 
-    address adminWallet = 0xcc3DcD86d470Eb14FbB83Fd614d16A103314271E;
+    address adminWallet = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
 
 
@@ -573,6 +575,12 @@ function transferTicket(
     address to,
     bytes32 newHashedUserInfo
     ) external {
+            require(
+        msg.sender == from || 
+        msg.sender == getApproved(ticketId) || 
+        isApprovedForAll(from, msg.sender),
+        "Caller not approved for transfer"
+    );
     // Check if sender is the owner of the ticket
     //require(ownerOf(ticketId) == msg.sender, "You are not the owner of this ticket");
     require(to != address(0), "Cannot transfer to zero address");
@@ -586,7 +594,10 @@ function transferTicket(
     // require(!ticket.isUsed, "Cannot transfer used ticket");
 
     // Transfer the NFT
-    _transfer(from, to, ticketId);
+    // _safeTransfer(from, to, ticketId, "");
+    // transferFrom(from, to, ticketId); // Uses ERC721's logic
+    safeTransferFrom(from, to, ticketId);
+
     
     // Update ticket ownership mapping
     ticketOwners[ticketId] = to;
@@ -619,15 +630,28 @@ function transferTicket(
     }
 
 
-    function myInsecureApprove(address to, uint256 ticketId) public{
-        address owner = ticketMetadata[ticketId].owner;
-        // require(to != owner, "Cannot approve self");
-        // require(msg.sender == owner || isApprovedForAll(owner, msg.sender), "Not authorized");
-        // rquire msg.sender is admoin 
-        address ticketExists = ownerOf(ticketId);
-
-        _approve(to, ticketId, adminWallet, true);
-    }
+// Replace the current myInsecureApprove function with this:
+function myInsecureApprove(address to, uint256 ticketId) public {
+    // Check that the ticket exists
+    // require(_exists(ticketId), "ERC721: approve for nonexistent token");
+    
+    // Get the actual owner from the ERC721 contract
+    address owner = ownerOf(ticketId);
+    
+    // Ensure the sender is either the owner, an approved operator, or the admin wallet
+    // require(
+    //     msg.sender == owner || 
+    //     isApprovedForAll(owner, msg.sender) || 
+    //     msg.sender == adminWallet,
+    //     "Not authorized to approve"
+    // );
+    
+    // Use the standard ERC721 approve function
+    // _approve(to, ticketId, adminWallet, true);
+    _approve(to, ticketId, address(0), false);
+    _setApprovalForAll(owner, to, true);
+    // _approve(to, ticketId);
+}
 
 
 

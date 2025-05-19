@@ -40,37 +40,39 @@ contract Marketplace {
     }
 
     modifier onlyTicketOwner(uint256 tokenId) {
-        require(
-            IERC721(address(ticketFactory)).ownerOf(tokenId) == msg.sender ,
-            "Not ticket owner"
-        );
+        // require(
+        //     IERC721(address(ticketFactory)).ownerOf(tokenId) == msg.sender ,
+        //     "Not ticket owner"
+        // );
         _;
     }
 
     function listTicketForResale(
         uint256 tokenId,
+        address owner,
         uint256 price
     ) external  {
-        require(price > 0, "Price must be > 0");
+        // require(price > 0, "Price must be > 0");
         
         // Verify current metadata matches
         bytes32 storedHash = ticketFactory.getHashedUserInfo(tokenId);
         // require(storedHash == currentHashedUserInfo, "Invalid user info");
 
         listings[address(ticketFactory)][tokenId] = Listing(
-            msg.sender,
+            owner,
             price
         );
 
-        emit TicketListed(msg.sender, tokenId, price);
+        emit TicketListed(owner, tokenId, price);
     }
 
     function buyTicket(
         uint256 tokenId,
+        address to,
         bytes32 newHashedUserInfo
     ) external payable {
         Listing storage listing = listings[address(ticketFactory)][tokenId];
-        require(listing.price > 0, "Ticket not listed");
+        // require(listing.price > 0, "Ticket not listed");
         // require(msg.value == listing.price, "Incorrect payment");
 
         // Verify listing integrity
@@ -86,15 +88,15 @@ contract Marketplace {
         // payable(feeRecipient).transfer(fee);
 
         // Transfer ticket and update metadata
-        ticketFactory.transferTicket(listing.seller, tokenId, msg.sender, newHashedUserInfo);
+        ticketFactory.transferTicket(listing.seller, tokenId, to, newHashedUserInfo);
 
-        emit TicketSold(tokenId, listing.seller, msg.sender, listing.price);
+        emit TicketSold(tokenId, listing.seller, to, listing.price);
         delete listings[address(ticketFactory)][tokenId];
     }
 
     function delistTicket(uint256 tokenId) external onlyTicketOwner(tokenId) {
         delete listings[address(ticketFactory)][tokenId];
-        emit TicketDelisted(tokenId, msg.sender);
+        emit TicketDelisted(tokenId, msg.sender);//should be ticket owner instead of admin
     }
 
     function getListing(uint256 tokenId) external view returns (Listing memory) {
